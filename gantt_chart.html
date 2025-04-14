@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>任务调度甘特图</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 20px;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .controls {
+      margin-bottom: 20px;
+    }
+    .info-box {
+      margin-bottom: 10px;
+      padding: 5px;
+    }
+    .gantt-container {
+      position: relative;
+      margin-top: 30px;
+    }
+    .time-axis {
+      display: flex;
+      border-top: 1px solid #ccc;
+      margin-bottom: 10px;
+    }
+    .time-marker {
+      flex: 1;
+      text-align: center;
+      font-size: 12px;
+    }
+    .task-row {
+      display: flex;
+      margin-bottom: 15px;
+      align-items: center;
+    }
+    .task-label {
+      width: 80px;
+      font-weight: bold;
+      margin-right: 10px;
+    }
+    .task-timeline {
+      flex: 1;
+      position: relative;
+      height: 30px;
+    }
+    .task-bar {
+      position: absolute;
+      height: 30px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+    .deadline-marker {
+      position: absolute;
+      height: 30px;
+      border-left: 2px dashed red;
+      z-index: 10;
+    }
+    .deadline-label {
+      position: absolute;
+      top: -15px;
+      color: red;
+      font-size: 10px;
+      transform: translateX(-50%);
+    }
+    .delay-overlay {
+      position: absolute;
+      height: 30px;
+      background-color: rgba(255, 0, 0, 0.3);
+      border-radius: 0 4px 4px 0;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      margin-top: 30px;
+      justify-content: center;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-right: 20px;
+      margin-bottom: 10px;
+    }
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      margin-right: 5px;
+      border-radius: 3px;
+    }
+    select {
+      padding: 8px;
+      font-size: 16px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background-color: white;
+      min-width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // 定义任务信息
+    const tasks = [0, 1, 2, 3, 4];
+    const completionTimes = [3, 5, 2, 4, 1];
+    const delayTimes = [5, 7, 4, 10, 6];
+
+    // 初始化种群
+    const population = [
+      [3, 1, 0, 4, 2],
+      [0, 4, 2, 1, 3],
+      [2, 0, 1, 3, 4],
+      [1, 4, 3, 0, 2],
+      [2, 0, 4, 3, 1]
+    ];
+
+    // 颜色配置
+    const colors = ['#4285F4', '#EA4335', '#FBBC05', '#34A853', '#8F00FF'];
+
+    const GanttChart = () => {
+      const [selectedSchedule, setSelectedSchedule] = React.useState(0);
+
+      // 计算每个任务的开始和结束时间
+      const calculateTimes = (schedule) => {
+        const taskTimes = [];
+        let currentTime = 0;
+
+        for (const taskIndex of schedule) {
+          const task = tasks[taskIndex];
+          const completionTime = completionTimes[taskIndex];
+          const delayTime = delayTimes[taskIndex];
+
+          taskTimes.push({
+            task,
+            start: currentTime,
+            duration: completionTime,
+            end: currentTime + completionTime,
+            delay: delayTime,
+            isDelayed: currentTime + completionTime > delayTime
+          });
+
+          currentTime += completionTime;
+        }
+
+        return taskTimes;
+      };
+
+      // 获取最大结束时间用于设置图表宽度
+      const getMaxEndTime = (taskTimes) => {
+        return Math.max(...taskTimes.map(t => t.end));
+      };
+
+      // 计算当前选择的调度方案的任务时间
+      const currentTaskTimes = calculateTimes(population[selectedSchedule]);
+      const maxTime = Math.max(getMaxEndTime(currentTaskTimes), Math.max(...delayTimes));
+
+      // 计算总延迟时间
+      const totalDelayTime = currentTaskTimes.reduce((sum, task) => {
+        return sum + (task.isDelayed ? task.end - task.delay : 0);
+      }, 0);
+
+      // 计算适应度
+      const fitness = 1 / (totalDelayTime + 1);
+
+      // 处理选择变更
+      const handleScheduleChange = (e) => {
+        setSelectedSchedule(parseInt(e.target.value));
+      };
+
+      return (
+        <div className="container">
+          <h1>任务调度甘特图</h1>
+
+          <div className="controls">
+            <label htmlFor="schedule-select">选择调度方案：</label>
+            <select
+              id="schedule-select"
+              value={selectedSchedule}
+              onChange={handleScheduleChange}
+            >
+              {population.map((schedule, index) => (
+                <option key={index} value={index}>
+                  方案{index}: [{schedule.join(', ')}]
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="info-box">
+            <div><strong>总延迟时间:</strong> {totalDelayTime}</div>
+            <div><strong>适应度:</strong> {fitness.toFixed(4)}</div>
+          </div>
+
+          <div className="gantt-container">
+            {/* 时间轴 */}
+            <div className="time-axis">
+              {Array.from({ length: maxTime + 1 }, (_, i) => (
+                <div key={i} className="time-marker">{i}</div>
+              ))}
+            </div>
+
+            {/* 任务条 */}
+            {currentTaskTimes.map((taskTime, index) => (
+              <div key={index} className="task-row">
+                <div className="task-label">任务 {taskTime.task}</div>
+                <div className="task-timeline">
+                  {/* 延迟时间标记 */}
+                  <div
+                    className="deadline-marker"
+                    style={{ left: `${(taskTime.delay / maxTime) * 100}%` }}
+                  >
+                    <div className="deadline-label">DL</div>
+                  </div>
+
+                  {/* 任务执行条 */}
+                  <div
+                    className="task-bar"
+                    style={{
+                      left: `${(taskTime.start / maxTime) * 100}%`,
+                      width: `${(taskTime.duration / maxTime) * 100}%`,
+                      backgroundColor: colors[taskTime.task]
+                    }}
+                  >
+                    {taskTime.duration}
+                  </div>
+
+                  {/* 延迟标记 */}
+                  {taskTime.isDelayed && (
+                    <div
+                      className="delay-overlay"
+                      style={{
+                        left: `${(taskTime.delay / maxTime) * 100}%`,
+                        width: `${((taskTime.end - taskTime.delay) / maxTime) * 100}%`
+                      }}
+                    ></div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* 图例 */}
+            <div className="legend">
+              {tasks.map(task => (
+                <div key={task} className="legend-item">
+                  <div
+                    className="legend-color"
+                    style={{ backgroundColor: colors[task] }}
+                  ></div>
+                  <span>任务 {task}</span>
+                </div>
+              ))}
+              <div className="legend-item">
+                <div
+                  className="legend-color"
+                  style={{ backgroundColor: 'rgba(255, 0, 0, 0.3)' }}
+                ></div>
+                <span>延迟部分</span>
+              </div>
+              <div className="legend-item">
+                <div
+                  className="legend-color"
+                  style={{
+                    backgroundColor: 'transparent',
+                    borderLeft: '2px dashed red',
+                    height: '16px'
+                  }}
+                ></div>
+                <span>截止时间</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // 渲染应用
+    ReactDOM.render(<GanttChart />, document.getElementById('root'));
+  </script>
+</body>
+</html>
